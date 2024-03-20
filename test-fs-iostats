@@ -36,12 +36,7 @@ STATHDR=`iostat | grep Device`
 RO=ro
 
 
-#for FS in ext3 zfs; do
-#for FS in zfs btrfs nilfs2 ext2 ext3 ext4 xfs jfs vfat ntfs; do
-#for FS in btrfs nilfs2 ext2 ext3 ext4 zfs xfs jfs ocfs2; do
-for FS in ext4 zfs btrfs xfs jfs ext3; do
-#for FS in btrfs; do
-#for FS in ext4; do
+for FS in ext4 ext3 xfs jfs zfs btrfs ; do
 
     LAST=0
     # num-ordered
