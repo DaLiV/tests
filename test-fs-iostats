@@ -1,0 +1,278 @@
+#!/bin/bash
+
+CR="\033[1G"
+CLREND="\033[0K"
+CLROK='[40m'
+CLRATTN='[41m'
+
+function regdata {
+	IDX=$1
+	echo -n -e "${CR}sync-and-measure $IDX$CLREND${CR}"; sync;sleep 0.2;sync
+	IO1=`iostat $DEV | grep $DEV`
+	KB1=`echo $IO1 | awk '{print $7}'`
+	if [ $LAST -eq 0 ]; then
+	    KB=$KB1
+	else
+	    KB=$(($KB1-${data_kb1[${data_nm[$LAST]}]}))
+	fi
+	LAST=${#data_nm[@]}
+	data_nm+=($IDX)
+	data_io[$IDX]=$IO1
+	data_kb[$IDX]=$KB
+	data_kb1[$IDX]=$KB1
+}
+
+WD=/tmp/fstest
+mkdir $WD > /dev/null 2>&1
+mkdir $WD/tst > /dev/null 2>&1
+cd $WD
+dd if=/dev/urandom of=$WD/tstfile.512 bs=512 count=1 > /dev/null 2>&1
+dd if=/dev/urandom of=$WD/tstfile.4k bs=1k count=4 > /dev/null 2>&1
+dd if=/dev/urandom of=$WD/tstfile.16k bs=1k count=16 > /dev/null 2>&1
+dd if=/dev/urandom of=$WD/tstfile.1m bs=1M count=1 > /dev/null 2>&1
+dd if=/dev/urandom of=$WD/tstfile.10m bs=1M count=10 > /dev/null 2>&1
+dd if=/dev/urandom of=$WD/tstfile.16m bs=1M count=16 > /dev/null 2>&1
+STATHDR=`iostat | grep Device`
+RO=ro
+
+
+#for FS in ext3 zfs; do
+#for FS in zfs btrfs nilfs2 ext2 ext3 ext4 xfs jfs vfat ntfs; do
+#for FS in btrfs nilfs2 ext2 ext3 ext4 zfs xfs jfs ocfs2; do
+for FS in ext4 zfs btrfs xfs jfs ext3; do
+#for FS in btrfs; do
+#for FS in ext4; do
+
+    LAST=0
+    # num-ordered
+    unset data_nm;	declare -a data_nm
+    # associative
+    unset data_io;	declare -A data_io
+    unset data_kb;	declare -A data_kb
+    unset data_kb1;	declare -A data_kb1
+    unset data_cmnt;	declare -A data_cmnt
+
+#for FS in  zfs; do
+    NOTOOLS=0
+    if [ "$FS" = "zfs" ]; then
+	echo OK
+	NOTOOLS=0
+    else
+	which mkfs.$FS > /dev/null 2>&1
+	if [ $? -ne 0 ]; then
+	    NOTOOLS=1
+	fi
+    fi
+    if [ $NOTOOLS -ne 1 ]; then
+	echo preparing for $FS
+	dd if=/dev/zero of=$WD/$FS.img bs=1M count=256 > /dev/null 2>&1
+	DEV=`losetup -f | sed -e 's/\/dev\///'`
+	regdata 'DEVCREATE'
+
+	losetup /dev/$DEV $WD/$FS.img > /dev/null 2>&1
+	case $FS in
+	    zfs)
+		#echo zpool-create
+		zpool create -O sync=always -m $WD/tst ZFSTest /dev/$DEV
+		#echo zfs-mountpoint
+		zfs set mountpoint=legacy ZFSTest
+		#umount $WD/tst
+		;;
+	    jfs)
+		mkfs.$FS -f /dev/$DEV > /dev/null 2>&1
+		;;
+	    ocfs2)
+		mkfs.$FS -F --mount=local /dev/$DEV > /dev/null 2>&1
+		;;
+	    *)
+		mkfs.$FS /dev/$DEV > /dev/null 2>&1
+		;;
+	esac
+	regdata 'FSCREATE'
+
+	if [ "$FS" = "zfs" ]; then
+	    #echo ZFS - mounted already
+	    mount.zfs /dev/$DEV $WD/tst -o rw,sync,noatime
+	    #exit
+	else
+	    echo mounting
+	    mount -t $FS /dev/$DEV $WD/tst -o rw,noatime
+	fi
+	regdata 'FSMOUNT'
+
+	cp $WD/tstfile.512 $WD/tst/tstfile.512
+	regdata 'cp.512.1-st'
+	cp $WD/tstfile.512 $WD/tst/tstfile.512
+	regdata 'cp.512.2nd'
+	cp $WD/tstfile.4k $WD/tst/tstfile.4k
+	regdata 'cp.4k.00'
+	cp $WD/tstfile.4k $WD/tst/tstfile.4k.1
+	regdata 'cp.4k.01'
+	cp $WD/tstfile.4k $WD/tst/tstfile.4k.2
+	regdata 'cp.4k.02'
+	cp $WD/tstfile.4k $WD/tst/tstfile.4k.3
+	regdata 'cp.4k.03'
+	cp $WD/tstfile.16k $WD/tst/tstfile.16k
+	regdata 'cp.16k.0'
+	cp $WD/tstfile.16k $WD/tst/tstfile.16k.1
+	regdata 'cp.16k.1'
+	cp $WD/tstfile.16k $WD/tst/tstfile.16k.2
+	regdata 'cp.16k.2'
+	cp $WD/tstfile.16k $WD/tst/tstfile.16k.3
+	regdata 'cp.16k.3'
+	cp $WD/tstfile.1m $WD/tst/tstfile.1m
+	regdata 'cp.1m.00'
+	cp $WD/tstfile.1m $WD/tst/tstfile.1m.1
+	regdata 'cp.1m.01'
+	cp $WD/tstfile.1m $WD/tst/tstfile.1m.2
+	regdata 'cp.1m.02'
+	cp $WD/tstfile.1m $WD/tst/tstfile.1m.3
+	regdata 'cp.1m.03'
+	cp $WD/tstfile.10m $WD/tst/tstfile.10m
+	regdata 'cp.10m.0'
+	cp $WD/tstfile.10m $WD/tst/tstfile.10m.1
+	regdata 'cp.10m.1'
+	cp $WD/tstfile.10m $WD/tst/tstfile.10m.2
+	regdata 'cp.10m.2'
+	cp $WD/tstfile.10m $WD/tst/tstfile.10m.3
+	regdata 'cp.10m.3'
+	cp $WD/tstfile.16m $WD/tst/tstfile.16m
+	regdata 'cp.16m.0'
+	cp $WD/tstfile.16m $WD/tst/tstfile.16m.1
+	regdata 'cp.16m.1'
+	cp $WD/tstfile.16m $WD/tst/tstfile.16m.2
+	regdata 'cp.16m.2'
+	cp $WD/tstfile.16m $WD/tst/tstfile.16m.3
+	regdata 'cp.16m.3'
+
+
+	dd if="$WD/tstfile.512" of="$WD/tst/tstfile.16m" > /dev/null 2>&1
+	regdata 'dd.512.16m-beg'
+	dd if="$WD/tstfile.512" of="$WD/tst/tstfile.16m" bs=512 seek=1 > /dev/null 2>&1
+	regdata 'dd.512.16m-2nd'
+	dd if="$WD/tstfile.512" of="$WD/tst/tstfile.16m" bs=512 seek=2 > /dev/null 2>&1
+	regdata 'dd.512.16m-3rd'
+	dd if="$WD/tstfile.512" of="$WD/tst/tstfile.16m" bs=512 seek=3 > /dev/null 2>&1
+	regdata 'dd.512.16m-4th'
+
+	cat "$WD/tstfile.512" >> "$WD/tst/tstfile.16m"
+	regdata 'cat.512.16m.e1'
+	cat "$WD/tstfile.512" >> "$WD/tst/tstfile.16m"
+	regdata 'cat.512.16m.e2'
+	cat "$WD/tstfile.512" >> "$WD/tst/tstfile.16m"
+	regdata 'cat.512.16m.e3'
+	cat "$WD/tstfile.512" >> "$WD/tst/tstfile.16m"
+	regdata 'cat.512.16m.e4'
+
+	cat "$WD/tstfile.512" >> "$WD/tst/tstfile.512"
+	regdata 'cat.512.512.e1'
+	cat "$WD/tstfile.512" >> "$WD/tst/tstfile.512"
+	regdata 'cat.512.512.e2'
+	cat "$WD/tstfile.512" >> "$WD/tst/tstfile.512"
+	regdata 'cat.512.512.e3'
+	cat "$WD/tstfile.512" >> "$WD/tst/tstfile.512"
+	regdata 'cat.512.512.e4'
+	cat "$WD/tstfile.512" >> "$WD/tst/tstfile.512"
+	regdata 'cat.512.512.e5'
+	cat "$WD/tstfile.512" >> "$WD/tst/tstfile.512"
+	regdata 'cat.512.512.e6'
+	cat "$WD/tstfile.512" >> "$WD/tst/tstfile.512"
+	regdata 'cat.512.512.e7'
+
+
+	if [ "$FS" = "zfs" ]; then
+#	    umount $WD/tst
+	    zpool export ZFSTest
+	else
+	    umount /dev/$DEV
+	fi
+	regdata 'FSUNMOUNT'
+
+
+	echo -e "\n"
+	if [ "$FS" = "zfs" ]; then
+	    echo "ZFS - RO"
+	    echo if problem - then create symlink 'zfs-disc' in '/dev/disk/by-id' to '../../loop0'
+	    ln -s /dev/$DEV /dev/disk/by-id/z.Test
+	    SHA10=$(sha1sum $WD/$FS.img)
+	    zpool import -o ro -d /dev/disk/by-id/z.Test ZFSTest
+	    SHA101=$(sha1sum $WD/$FS.img)
+	    sync;sleep 0.5;sync
+	    mount.zfs /dev/$DEV $WD/tst -o ro,noatime,sync
+	    SHA102=$(sha1sum $WD/$FS.img)
+	    sync;sleep 0.5;sync
+	    umount $WD/tst
+	    SHA103=$(sha1sum $WD/$FS.img)
+	    zpool export ZFSTest
+	    sync;sleep 0.5;sync
+	    SHA11=$(sha1sum $WD/$FS.img)
+	    zpool import -o ro -d /dev/disk/by-id/ ZFSTest
+	    zpool list | grep ZFSTest
+	    zfs list | grep ZFSTest
+	    mount.zfs /dev/$DEV $WD/tst -o ro,noatime,sync
+	    if [ "$SHA10" == "$SHA11" ];then
+		CLR=$CLROK
+	    else
+		CLR=$CLRATTN
+	    fi
+	    echo -e "MOUNT-UMOUNT : $CLR$SHA10\nIMPORT: $SHA101\nMOUNT: $SHA102\nUMOUNT: $SHA103\nEXPORT: $SHA11$CLROK"
+	    dd if=$WD/tst/tstfile.512 of=/dev/null > /dev/null 2>&1
+	    sync;sleep 0.5;sync
+	    umount $WD/tst
+	    zpool export ZFSTest
+	    #zpool destroy ZFSTest
+	    sync;sleep 0.5;sync
+	    rm -f /dev/disk/by-id/z.Test
+	else
+	    echo mounting RO
+	    MNTOPTS=''
+	    SHA10=$(sha1sum $WD/$FS.img)
+	    mount -t $FS /dev/$DEV $WD/tst -o ro,noatime$MNTOPTS
+	    sync;sleep 0.5;sync
+	    umount /dev/$DEV
+	    sync;sleep 0.5;sync
+	    SHA11=$(sha1sum $WD/$FS.img)
+	    mount -t $FS /dev/$DEV $WD/tst -o ro,noatime$MNTOPTS
+	    if [ "$SHA10" == "$SHA11" ];then
+		CLR=$CLROK
+	    else
+		CLR=$CLRATTN
+	    fi
+	    echo -e "$CLR$SHA10 $SHA11$CLROK"
+	    sync;sleep 0.5;sync
+	    dd if=$WD/tst/tstfile.512 of=/dev/null > /dev/null 2>&1
+	    umount /dev/$DEV
+	    sync;sleep 0.5;sync
+	fi
+	regdata 'FSRO'
+
+	echo -e "\n"
+
+	#losetup -d /dev/$DEV
+	echo "========================================"
+	echo "$STATHDR = FS	KB	OP"
+
+	# Dump colected Array data
+	CNT=${#data_nm[@]}
+	#echo $CNT
+	for (( i=0; i<CNT; i++ ))
+	do
+	    IDX=${data_nm[$i]}
+	    #echo -e "${data_io[$IDX]} = $FS	$IDX	${data_kb[$IDX]}"
+	    printf "%s = %s	%s	%s\n" "${data_io[$IDX]}" "$FS" "${data_kb[$IDX]}" "$IDX"
+	done
+
+	echo "========================================"
+#	rm -f $WD/$FS.img
+    else
+	echo NO TOOLS for $FS
+    fi
+
+
+    sleep 0.3
+    echo $DEV
+    losetup -d /dev/$DEV
+    ls -l /dev/$DEV
+    rmmod loop
+done
+#losetup -D
