@@ -7,7 +7,7 @@ CLRATTN='[41m'
 
 function regdata {
 	IDX=$1
-	echo -n -e "${CR}sync-and-measure $IDX$CLREND${CR}"; sync;sleep 0.2;sync
+	echo -n -e "${CR}sync-and-measure $IDX$CLREND${CR}"; sync;sleep 0.5;sync
 	IO1=`iostat $DEV | grep $DEV`
 	KB1=`echo $IO1 | awk '{print $7}'`
 	if [ $LAST -eq 0 ]; then
