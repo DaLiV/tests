@@ -1,5 +1,5 @@
 # tests
-Here maz be placed some test scripts
+Here may be placed some test scripts
 
 test-fs-iostats - can be used to see and compare behaviour of diffirent FS to similar operations
     * that primarily was used by me to analyze why btrfs hardly wear-out SSD/NVME/SD-Cards
