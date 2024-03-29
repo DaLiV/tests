@@ -47,7 +47,6 @@ for FS in ext4 ext3 xfs jfs zfs btrfs ; do
     unset data_kb1;	declare -A data_kb1
     unset data_cmnt;	declare -A data_cmnt
 
-#for FS in  zfs; do
     NOTOOLS=0
     if [ "$FS" = "zfs" ]; then
 	echo OK
@@ -73,6 +72,9 @@ for FS in ext4 ext3 xfs jfs zfs btrfs ; do
 		zfs set mountpoint=legacy ZFSTest
 		#umount $WD/tst
 		;;
+	    btrfs)
+		mkfs.$FS -f /dev/$DEV > /dev/null 2>&1
+		;;
 	    jfs)
 		mkfs.$FS -f /dev/$DEV > /dev/null 2>&1
 		;;
@@ -85,14 +87,19 @@ for FS in ext4 ext3 xfs jfs zfs btrfs ; do
 	esac
 	regdata 'FSCREATE'
 
-	if [ "$FS" = "zfs" ]; then
-	    #echo ZFS - mounted already
-	    mount.zfs /dev/$DEV $WD/tst -o rw,sync,noatime
-	    #exit
-	else
-	    echo mounting
-	    mount -t $FS /dev/$DEV $WD/tst -o rw,noatime
-	fi
+	echo mounting
+	case $FS in 
+	    zfs)
+		#echo ZFS - mounted already
+		mount.zfs /dev/$DEV $WD/tst -o rw,sync,noatime
+		;;
+	    btrfs)
+		mount -t $FS /dev/$DEV $WD/tst -o rw,noatime 
+		#,nodatacow
+		;;
+	    *)
+		mount -t $FS /dev/$DEV $WD/tst -o rw,noatime
+	esac
 	regdata 'FSMOUNT'
 
 	cp $WD/tstfile.512 $WD/tst/tstfile.512
@@ -143,11 +150,15 @@ for FS in ext4 ext3 xfs jfs zfs btrfs ; do
 
 	dd if="$WD/tstfile.512" of="$WD/tst/tstfile.16m" > /dev/null 2>&1
 	regdata 'dd.512.16m-beg'
+	#IDX='dd.512.16m-beg';sync;sleep 0.2;sync;IO1=`iostat $DEV | grep $DEV`;KB1=`echo $IO1 | awk '{print $7}'`;KB=$(($KB1-${data_kb1[${data_nm[$LAST]}]}));LAST=${#data_nm[@]};data_nm+=($IDX);data_io[$IDX]=$IO1;data_kb[$IDX]=$KB;data_kb1[$IDX]=$KB1
 	dd if="$WD/tstfile.512" of="$WD/tst/tstfile.16m" bs=512 seek=1 > /dev/null 2>&1
+	#IDX='dd.512.16m-2nd';sync;sleep 0.2;sync;IO1=`iostat $DEV | grep $DEV`;KB1=`echo $IO1 | awk '{print $7}'`;KB=$(($KB1-${data_kb1[${data_nm[$LAST]}]}));LAST=${#data_nm[@]};data_nm+=($IDX);data_io[$IDX]=$IO1;data_kb[$IDX]=$KB;data_kb1[$IDX]=$KB1
 	regdata 'dd.512.16m-2nd'
 	dd if="$WD/tstfile.512" of="$WD/tst/tstfile.16m" bs=512 seek=2 > /dev/null 2>&1
+	#IDX='dd.512.16m-3rd';sync;sleep 0.2;sync;IO1=`iostat $DEV | grep $DEV`;KB1=`echo $IO1 | awk '{print $7}'`;KB=$(($KB1-${data_kb1[${data_nm[$LAST]}]}));LAST=${#data_nm[@]};data_nm+=($IDX);data_io[$IDX]=$IO1;data_kb[$IDX]=$KB;data_kb1[$IDX]=$KB1
 	regdata 'dd.512.16m-3rd'
 	dd if="$WD/tstfile.512" of="$WD/tst/tstfile.16m" bs=512 seek=3 > /dev/null 2>&1
+	#IDX='dd.512.16m-4th';sync;sleep 0.2;sync;IO1=`iostat $DEV | grep $DEV`;KB1=`echo $IO1 | awk '{print $7}'`;KB=$(($KB1-${data_kb1[${data_nm[$LAST]}]}));LAST=${#data_nm[@]};data_nm+=($IDX);data_io[$IDX]=$IO1;data_kb[$IDX]=$KB;data_kb1[$IDX]=$KB1
 	regdata 'dd.512.16m-4th'
 
 	cat "$WD/tstfile.512" >> "$WD/tst/tstfile.16m"
